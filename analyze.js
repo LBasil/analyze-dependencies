@@ -1,73 +1,74 @@
-var fs = require('fs');
-var path = require('path');
+#!/usr/bin/env node
+// Analyse un dossier de code JavaScript et écrit dependencies.js : pour chaque module
+// importé (require, import ... from, import()), la liste des fichiers qui l'utilisent.
+//
+//   node analyze.js <dossier> [--out dependencies.js]
+//
+// index.html lit ce fichier pour afficher le résultat.
+const fs = require('fs');
+const path = require('path');
 
-// Define the source directory to scan for JavaScript files
-var srcPath = 'INSERT YOUR PATH HERE';
+const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'coverage']);
+const EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx', '.vue']);
 
-/**
- * Recursively retrieves all JavaScript files within a given directory.
- * @param {string} dir - The directory to scan.
- * @param {Array} files - The list of JavaScript files found.
- * @returns {Array} - A list of full paths to JavaScript files.
- */
-function getAllJsFiles(dir, files) {
-    files = files || [];
-    fs.readdirSync(dir).forEach(function (file) {
-        var fullPath = path.join(dir, file);
-        if (fs.statSync(fullPath).isDirectory()) {
-            getAllJsFiles(fullPath, files); // Recursively scan subdirectories
-        } else if (file.endsWith('.js')) {
-            files.push(fullPath); // Add JavaScript file to the list
-        }
-    });
-    return files;
-}
-
-/**
- * Extracts all `require()` dependencies from a given file content.
- * @param {string} fileContent - The content of a JavaScript file.
- * @returns {Array} - A list of required module names (file names only).
- */
-function extractRequires(fileContent) {
-    var regex = /require\(['"]([^'"]+)['"]\)/g;
-    var matches = [];
-    var match;
-    while ((match = regex.exec(fileContent)) !== null) {
-        matches.push(path.basename(match[1])); // Extract only the file name
+/** Liste récursivement les fichiers de code, en ignorant node_modules, .git, dist, etc. */
+function getAllSourceFiles(dir, files = []) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (!IGNORED_DIRS.has(entry.name)) getAllSourceFiles(fullPath, files);
+    } else if (EXTENSIONS.has(path.extname(entry.name))) {
+      files.push(fullPath);
     }
-    return matches;
+  }
+  return files;
 }
 
-/**
- * Builds a dependency map linking each required module to the files that import it.
- * @param {Array} files - List of JavaScript files to analyze.
- * @returns {Object} - A dependency mapping object.
- */
-function buildDependencyMap(files) {
-    var dependencyMap = {};
+// require('x'), import x from 'x', import 'x', export ... from 'x', import('x')
+const IMPORT_PATTERNS = [
+  /\brequire\(\s*['"]([^'"]+)['"]\s*\)/g,
+  /\bimport\s+(?:[\w*{}\s,$]+?\s+from\s+)?['"]([^'"]+)['"]/g,
+  /\bexport\s+[\w*{}\s,$]+?\s+from\s+['"]([^'"]+)['"]/g,
+  /\bimport\(\s*['"]([^'"]+)['"]\s*\)/g,
+];
 
-    files.forEach(function (file) {
-        var content = fs.readFileSync(file, 'utf-8');
-        var dependencies = extractRequires(content);
-
-        dependencies.forEach(function (dep) {
-            if (!dependencyMap[dep]) {
-                dependencyMap[dep] = [];
-            }
-            dependencyMap[dep].push(file); // Map dependency to the files that require it
-        });
-    });
-
-    return dependencyMap;
+/** Retourne les noms (nom de fichier seul, sans extension) des modules importés par un contenu. */
+function extractImports(content) {
+  const found = new Set();
+  for (const pattern of IMPORT_PATTERNS) {
+    for (const match of content.matchAll(pattern)) {
+      found.add(path.basename(match[1]).replace(/\.(c|m)?[jt]sx?$|\.vue$/, ''));
+    }
+  }
+  return [...found];
 }
 
-// Execute the dependency analysis
-var allJsFiles = getAllJsFiles(srcPath);
-var dependencyMap = buildDependencyMap(allJsFiles);
+/** Construit { module: [fichiers qui l'importent] }. */
+function buildDependencyMap(files, root) {
+  const map = {};
+  for (const file of files) {
+    const relative = root ? path.relative(root, file) : file;
+    for (const dep of extractImports(fs.readFileSync(file, 'utf-8'))) {
+      (map[dep] = map[dep] || []).push(relative);
+    }
+  }
+  return map;
+}
 
-// Save results to `dependencies.js`
-var outputPath = path.join(__dirname, 'dependencies.js');
-var outputContent = "var dependencies = " + JSON.stringify(dependencyMap, null, 2) + ";";
-fs.writeFileSync(outputPath, outputContent, 'utf-8');
+function main(argv) {
+  const outIndex = argv.indexOf('--out');
+  const outPath = outIndex !== -1 ? argv[outIndex + 1] : path.join(__dirname, 'dependencies.js');
+  const target = argv.find((arg, i) => !arg.startsWith('--') && (outIndex === -1 || i !== outIndex + 1));
+  if (!target || !fs.existsSync(target) || !fs.statSync(target).isDirectory()) {
+    console.error('Usage : node analyze.js <dossier> [--out dependencies.js]');
+    process.exit(1);
+  }
+  const files = getAllSourceFiles(target);
+  const map = buildDependencyMap(files, target);
+  fs.writeFileSync(outPath, 'var dependencies = ' + JSON.stringify(map, null, 2) + ';\n', 'utf-8');
+  console.log(`${files.length} fichiers analysés, ${Object.keys(map).length} modules trouvés -> ${outPath}`);
+}
 
-console.log("\n📄 Dependencies map generated in dependencies.js");
+if (require.main === module) main(process.argv.slice(2));
+
+module.exports = { getAllSourceFiles, extractImports, buildDependencyMap };

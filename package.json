@@ -1,0 +1,10 @@
+{
+  "name": "analyze-dependencies",
+  "version": "1.1.0",
+  "description": "Liste, pour chaque module importé, les fichiers qui l'utilisent. CLI Node.js et page de consultation.",
+  "private": true,
+  "bin": { "analyze-dependencies": "analyze.js" },
+  "scripts": { "test": "node --test" },
+  "engines": { "node": ">=18" },
+  "license": "MIT"
+}
