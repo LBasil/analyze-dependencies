@@ -159,6 +159,11 @@
 
     <script src="dependencies.js"></script>
     <script>
+        if (typeof dependencies === 'undefined') {
+            document.body.insertAdjacentHTML('afterbegin',
+                '<div class="alert alert-warning m-4">dependencies.js est introuvable. Lance d\'abord : <code>node analyze.js &lt;dossier&gt;</code></div>');
+            var dependencies = {};
+        }
         (function () {
             var select = document.getElementById('dependencySelect');
             var resultList = document.getElementById('resultList');
@@ -178,9 +183,9 @@
 
             // Extract the name of the component from the path (last folder name before the file)
             function extractComponentName(filePath) {
-                var pathParts = filePath.split("\\"); // Split path by backslashes
-                var componentName = pathParts[pathParts.length - 2]; // Get the last folder name (before the file name)
-                return componentName;
+                var pathParts = filePath.split(/[\\/]/); // Windows (\) et macOS/Linux (/)
+                // Dernier dossier avant le nom du fichier ; à la racine, on affiche le fichier lui-même
+                return pathParts.length > 1 ? pathParts[pathParts.length - 2] : '(racine)';
             }
 
             // Display files where the component is required
@@ -195,8 +200,14 @@
                         // Extract the component name from the file path
                         var requiringComponent = extractComponentName(file);
                         
-                        li.innerHTML = '<span><i class="bi bi-folder2-open text-warning me-2"></i> ' + file + '</span>' +
-                                        '<span class="badge">' + requiringComponent + '</span>';
+                        var label = document.createElement('span');
+                        label.innerHTML = '<i class="bi bi-folder2-open text-warning me-2"></i> ';
+                        label.appendChild(document.createTextNode(file)); // textContent : pas d'injection HTML via un nom de fichier
+                        var badge = document.createElement('span');
+                        badge.className = 'badge';
+                        badge.textContent = requiringComponent;
+                        li.appendChild(label);
+                        li.appendChild(badge);
                         resultList.appendChild(li);
                     });
                 }

@@ -1,42 +1,28 @@
-# Dependency Analysis Tool
+# Dependency Analyzer
 
-This tool analyzes the dependencies in your project, specifically focusing on components used with `require()` in Node.js. It allows you to:
+Outil Node.js qui parcourt un dossier de code et indique, pour chaque module importé, quels fichiers l'utilisent. Utile avant de toucher à un composant partagé : on voit tout de suite ce qui risque de régresser.
 
-- Select components from a dynamically generated dropdown list.
-- View a list of files that require each component.
-- Filter results based on the selected component.
+Il comprend `require()`, `import ... from`, `export ... from` et `import()`, dans des fichiers `.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.tsx` et `.vue`. Les dossiers `node_modules`, `.git`, `dist`, `build` et `coverage` sont ignorés.
 
-## Features
+## Utilisation
 
-- **Responsive design**: The tool is fully responsive, adjusting to different screen sizes.
-- **Interactive UI**: With hover effects and badges displaying the associated component names.
-- **Real-time filtering**: Display files based on the selected component with dynamic updating.
+```bash
+node analyze.js <dossier>             # par exemple : node analyze.js ../mon-projet/src
+node analyze.js <dossier> --out autre.js
+```
 
-## How It Works
+Le script écrit `dependencies.js`. Ouvre ensuite `index.html` dans un navigateur : on choisit un module dans la liste, on voit les fichiers qui l'importent, et un bouton copie un texte « Might have regressions on » à coller dans une description de pull request.
 
-The tool loads a JSON-like object (`dependencies.js`) containing your project's components and their respective files. When a user selects a component from the dropdown menu, the files that `require()` that component are displayed in a list.
+## Limites
 
-## Installation
+L'analyse est faite avec des expressions régulières, pas avec un vrai parseur : un import écrit dans un commentaire ou une chaîne sera compté. Les modules sont identifiés par leur nom de fichier seul, donc deux fichiers de même nom dans des dossiers différents sont regroupés.
 
-1. Clone or download the repository.
-2. Ensure that you have the required `analyze.js` file with your project’s data.
-3. Modify the script to add your path to src/views
-4. Execute the script ```node analyze.js```
-5. Open `index.html` in a browser.
+## Tests
 
-## Usage
+```bash
+npm test
+```
 
-1. Select a component from the dropdown.
-2. View the list of files that require the selected component.
-3. Hover over the files for an enhanced user experience.
+## Licence
 
-## Technologies Used
-
-- **HTML5** for structure.
-- **CSS** (via Bootstrap 5) for styling.
-- **JavaScript (ES5)** for dynamic behavior.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
+MIT, voir [LICENSE](LICENSE).
